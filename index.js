@@ -47,7 +47,7 @@ const verifyToken = async (req, res, next) => {
 
 
 app.get("/", (req, res) => {
-    res.send("Welcome to the Airoffice System");
+    res.send("Welcome to food-fair System");
 });
 
 
@@ -76,7 +76,7 @@ async function run() {
         // Get the database and collection on which to run the operation
         const database = client.db("food-fair");
         const items = database.collection("items");
-        
+
 
         //jwt token api ------------------------------
         app.post('/api/jwt', (req, res) => {
@@ -99,9 +99,128 @@ async function run() {
 
         //end jwt token api ------------------------------
 
-        /* =========================
-            CREATE BOOKING
-        ========================= */
+
+        /* ================= Food Items ================= */
+        // static items (10 items only)
+        app.post("/api/items", async (req, res) => {
+            const result = await items.insertOne(req.body);
+            res.send(result);
+        });
+
+        app.get("/api/items", async (req, res) => {
+            const foods = await items.find().toArray();
+            res.send(foods);
+        });
+
+        /* ============================================ */
+
+
+        /* ================= Sales ================= */
+        app.post("/api/sales", async (req, res) => {
+            const { foodId, foodName, place, quantity, unitPrice, date } = req.body;
+
+            const sale = {
+                foodId,
+                foodName,
+                place,
+                quantity,
+                unitPrice,
+                totalPrice: quantity * unitPrice,
+                date: new Date(date)
+            };
+
+            const result = await salesCol.insertOne(sale);
+            res.send(result);
+        });
+
+        app.get("/api/sales", async (req, res) => {
+            const { place, from, to } = req.query;
+
+            let query = {};
+
+            if (place) query.place = place;
+
+            if (from && to) {
+                query.date = {
+                    $gte: new Date(from),
+                    $lte: new Date(to)
+                };
+            }
+
+            const sales = await salesCol.find(query).sort({ date: -1 }).toArray();
+            res.send(sales);
+        });
+
+        /* ============================================ */
+
+        /* ================= Costs ================= */
+        app.post("/api/costs", async (req, res) => {
+            const cost = {
+                place: req.body.place,
+                type: req.body.type, // food | transport | rent | helper | misc
+                description: req.body.description,
+                amount: Number(req.body.amount),
+                date: new Date(req.body.date)
+            };
+
+            const result = await costsCol.insertOne(cost);
+            res.send(result);
+        });
+
+        app.get("/api/costs", async (req, res) => {
+            const { place, from, to } = req.query;
+
+            let query = {};
+
+            if (place) query.place = place;
+
+            if (from && to) {
+                query.date = {
+                    $gte: new Date(from),
+                    $lte: new Date(to)
+                };
+            }
+
+            const costs = await costsCol.find(query).sort({ date: -1 }).toArray();
+            res.send(costs);
+        });
+        /* ============================================ */
+
+        /* ================= Profit Report ================= */
+        app.get("/report", async (req, res) => {
+            const { place, from, to } = req.query;
+
+            let match = {};
+
+            if (place) match.place = place;
+
+            if (from && to) {
+                match.date = {
+                    $gte: new Date(from),
+                    $lte: new Date(to)
+                };
+            }
+
+            const salesTotal = await salesCol.aggregate([
+                { $match: match },
+                { $group: { _id: null, totalSales: { $sum: "$totalPrice" } } }
+            ]).toArray();
+
+            const costTotal = await costsCol.aggregate([
+                { $match: match },
+                { $group: { _id: null, totalCost: { $sum: "$amount" } } }
+            ]).toArray();
+
+            const totalSales = salesTotal[0]?.totalSales || 0;
+            const totalCost = costTotal[0]?.totalCost || 0;
+
+            res.send({
+                totalSales,
+                totalCost,
+                profit: totalSales - totalCost
+            });
+        });
+        /* ============================================ */
 
 
 
