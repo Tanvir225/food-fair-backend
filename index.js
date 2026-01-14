@@ -76,6 +76,7 @@ async function run() {
         const items = database.collection("items");
         const sales = database.collection("sales");
         const costs = database.collection("costs");
+        const places = database.collection("places");
 
 
         //jwt token api ------------------------------
@@ -159,12 +160,13 @@ async function run() {
             const cost = {
                 place: req.body.place,
                 type: req.body.type, // food | transport | rent | helper | misc
-                description: req.body.description,
                 amount: Number(req.body.amount),
                 date: new Date(req.body.date)
             };
 
-            const result = await costsCol.insertOne(cost);
+            console.log(cost);
+
+            const result = await costs.insertOne(cost);
             res.send(result);
         });
 
@@ -182,14 +184,14 @@ async function run() {
                 };
             }
 
-            const costs = await costsCol.find(query).sort({ date: -1 }).toArray();
-            res.send(costs);
+            const costsCollection = await costs.find(query).sort({ date: -1 }).toArray();
+            res.send(costsCollection);
         });
         /* ============================================ */
 
         app.get("/api/report", async (req, res) => {
             const { place, from, to } = req.query;
-            console.log(place,from,to);
+            console.log(place, from, to);
 
             let match = {};
             if (place) match.place = place;
@@ -222,6 +224,42 @@ async function run() {
 
         /* ============================================ */
 
+
+        // GET all places
+        app.get("/api/places", async (req, res) => {
+            try {
+                const placesCollection = await places.find({})
+                    .sort({ name: 1 })
+                    .toArray();
+
+                res.send(placesCollection);
+            } catch (err) {
+                console.error("❌ Fetch places error:", err);
+                res.status(500).send({ message: "Failed to load places" });
+            }
+        });
+
+        // POST new place
+        app.post("/api/places", async (req, res) => {
+            try {
+                const place = {
+                    name: req.body.name,
+                    createdAt: new Date(),
+                };
+
+                const exists = await places.findOne({ name: place.name });
+                if (exists) {
+                    return res.status(409).send({ message: "Place already exists" });
+                }
+                console.log(place);
+
+                const result = await places.insertOne(place);
+                res.send({ success: true, insertedId: result.insertedId });
+            } catch (err) {
+                console.error("❌ Add place error:", err);
+                res.status(500).send({ message: "Failed to add place" });
+            }
+        });
 
 
 
