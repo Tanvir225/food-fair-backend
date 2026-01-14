@@ -16,8 +16,6 @@ app.use(cors(
     {
         origin: [
             "http://localhost:5173",
-
-
         ],
         credentials: true,
     }
@@ -74,8 +72,10 @@ async function run() {
         // await client.connect();
 
         // Get the database and collection on which to run the operation
-        const database = client.db("food-fair");
+        const database = client.db("foof-fair");
         const items = database.collection("items");
+        const sales = database.collection("sales");
+        const costs = database.collection("costs");
 
 
         //jwt token api ------------------------------
@@ -117,7 +117,7 @@ async function run() {
 
         /* ================= Sales ================= */
         app.post("/api/sales", async (req, res) => {
-            const { foodId, foodName, place, quantity, unitPrice, date } = req.body;
+            const { foodId, foodName, place, quantity, unitPrice, total } = req.body;
 
             const sale = {
                 foodId,
@@ -125,11 +125,12 @@ async function run() {
                 place,
                 quantity,
                 unitPrice,
-                totalPrice: quantity * unitPrice,
-                date: new Date(date)
+                total,
+                date: new Date()
             };
 
-            const result = await salesCol.insertOne(sale);
+            console.log(sale);
+            const result = await sales.insertOne(sale);
             res.send(result);
         });
 
@@ -147,8 +148,8 @@ async function run() {
                 };
             }
 
-            const sales = await salesCol.find(query).sort({ date: -1 }).toArray();
-            res.send(sales);
+            const salesCollection = await sales.find(query).sort({ date: -1 }).toArray();
+            res.send(salesCollection);
         });
 
         /* ============================================ */
@@ -186,40 +187,39 @@ async function run() {
         });
         /* ============================================ */
 
-        /* ================= Profit Report ================= */
-        app.get("/report", async (req, res) => {
+        app.get("/api/report", async (req, res) => {
             const { place, from, to } = req.query;
+            console.log(place,from,to);
 
             let match = {};
-
             if (place) match.place = place;
-
             if (from && to) {
                 match.date = {
                     $gte: new Date(from),
-                    $lte: new Date(to)
+                    $lte: new Date(to),
                 };
             }
 
-            const salesTotal = await salesCol.aggregate([
+            const salesAgg = await sales.aggregate([
                 { $match: match },
-                { $group: { _id: null, totalSales: { $sum: "$totalPrice" } } }
+                { $group: { _id: null, totalSales: { $sum: "$total" } } },
             ]).toArray();
 
-            const costTotal = await costsCol.aggregate([
+            const costAgg = await costs.aggregate([
                 { $match: match },
-                { $group: { _id: null, totalCost: { $sum: "$amount" } } }
+                { $group: { _id: null, totalCost: { $sum: "$amount" } } },
             ]).toArray();
 
-            const totalSales = salesTotal[0]?.totalSales || 0;
-            const totalCost = costTotal[0]?.totalCost || 0;
+            const totalSales = salesAgg[0]?.totalSales || 0;
+            const totalCost = costAgg[0]?.totalCost || 0;
 
             res.send({
                 totalSales,
                 totalCost,
-                profit: totalSales - totalCost
+                profit: totalSales - totalCost,
             });
         });
+
         /* ============================================ */
 
 
